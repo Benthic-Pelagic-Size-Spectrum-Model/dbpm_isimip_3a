@@ -5,7 +5,7 @@
 
 #### STEP 3: RUN THE MODEL
 # Set to the base folder for the DBPM runs
-setwd("/data/home/camillan/dbpm")
+# setwd("/data/home/camillan/dbpm")
 
 rm(list=ls())
 
