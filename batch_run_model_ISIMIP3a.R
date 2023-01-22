@@ -1,4 +1,3 @@
-
 # CN this is an updated file from Ryan to run the model in parallel.
 # it calls runmodel_yearly.R (or runmodel.R, depending on whether you need to run yearly or monthly). NOTE: You might need to load these files from Ryan's folder too. 
 # in Julia's older version, this codes is included in runmodel_calls.r but it's very different!
@@ -14,6 +13,7 @@ rm(list=ls())
 # install.packages("zoo")
 library(zoo)
 library(parallel)
+library(tictoc)
 
 # ISIMIP3b runs 
 # esms <- c("GFDL-ESM4", "IPSL-CM6A-LR")
@@ -43,7 +43,7 @@ source('runmodel_yearly.R')
 
 # for(i in 1:length(esms)){ # Loop over esms
   
-  i = 3 # ISIMIP3a - scenario - spinup 1deg started on 20 sept at 5pm. After 2.5 days (23 sept 9am) only 179 files over more than 41000! 
+  i = 1 # ISIMIP3a - scenario - spinup 1deg started on 20 sept at 5pm. After 2.5 days (23 sept 9am) only 179 files over more than 41000! 
   curr_esm <- esms[i]
   
   # load(list.files(path=paste("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, '/',  sep = ""), pattern = "*depth*", full.names = TRUE)) # Load esm depth file
@@ -84,7 +84,8 @@ source('runmodel_yearly.R')
     
     
     # set up cluster
-    numcores= 45 # gem48 has 48 cpu 
+    tic()
+    numcores= detectCores()-1 #45 # gem48 has 48 cpu 
     
     cl <- makeForkCluster(getOption("cl.cores", numcores))
     
@@ -102,9 +103,12 @@ source('runmodel_yearly.R')
     print((proc.time()-ptm)/60.0)
     
     stopCluster(cl)
+    toc()
   # }
 
 # }
+    
+# q <- readRDS("/rd/gem/private/fishmip_outputs/ISIMIP3a/obsclim/1deg/dbpm_output_all_10000_1deg.rds")
     
 # ### projections protocols ssp ----
 #     
