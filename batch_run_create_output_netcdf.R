@@ -6,17 +6,22 @@ rm(list=ls())
 #install.packages("RNetCDF")
 
 library('RNetCDF')
-setwd("/data/home/camillan/dbpm")
 
 # CN work with one earth model at the time: 
 # load(file ="/../../rd/gem/private/fishmip_inputs/ISIMIP3b/IPSL-CM6A-LR/IPSL-CM6A-LR_depth.RData") # load depth data
 # load(file ="/../../rd/gem/private/fishmip_inputs/ISIMIP3b/GFDL-ESM4/GFDL-ESM4_depth.RData") 
 
 # CN or chose your model here # NOTE HERE YOU DECIDE THE ESM 
-esms <- c("GFDL-ESM4", "IPSL-CM6A-LR")
-curr_esm <- esms[2]
-file = paste0("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, "/" , curr_esm, "_depth.RData")
-load(file)
+esms <- c("ctrlclim", "spinup","obsclim")
+curr_esm <- esms[1]
+curr_scen <- "1deg"
+# load(paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/", curr_esm, "/" , curr_esm, "_depth.RData"))
+load(list.files(path=paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/",
+                           "obsclim", 
+                           '/', 
+                           curr_scen, 
+                           sep = ""),
+                pattern = "*deptho*", full.names = TRUE))
 
 # # locate Noth Sea and dowload for 1 grid sise-spectrum analysis
 # trial<-depth
@@ -65,63 +70,28 @@ load(file)
 grids<-1:dim(depth)[1] 
 
 # locations of inputs, outputs from models and where to save netcdf 
-input_loc <- paste0("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm,"/")
-output_loc <- paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/",curr_esm,"/")
-save_loc <- paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/",curr_esm,"/netcdf/")
+input_loc <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/", curr_esm,"/")
+output_loc <- paste0("rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/")
+save_loc <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/netcdf/")
 
 # CN variables to make 
 # vars2make <- c('U', 'V', 'GGU','GGV') # 'W','dx','x') # if not aggregated   
 vars2make <- c('tcb', 'tpb', 'bp30cm', 'bp30to90cm',"bp90cm",'tdb','bd30cm', 'bd30to90cm',"bd90cm") # if aggregated # NOTE this order is very important!! 
                                                                                                     # if you change it, you need to change dbpm.variables at the beginning of the
                                                                                                     # makenetcdfs_func.R
-# added tcblog10 below, as it needs a size dimention
+# added tcblog10 below, as it needs a size dimension
 prots <- c('picontrol','historical', 'ssp126', 'ssp585')
 yearRange<- c('1850_2100', '1850_2014', '2015_2100', '2015_2100')
 
-# ### option 1  OBSOLETE to DELETE ----
-# # CN: define additional parameters outsirde the function (isave if considering historical protocol where weekly outputs have been saved)
-# # use a random grid input/output
-# # historical 
-# result_set <- readRDS("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/IPSL-CM6A-LR/historical/dbpm_output_all_1_historical.rds")
-# inputs <- readRDS("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/IPSL-CM6A-LR/historical/grid_1_IPSL-CM6A-LR_historical.rds")
-# # ssp126 
-# # result_set <- readRDS("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/IPSL-CM6A-LR/ssp126/dbpm_output_all_1_ssp126.rds")
-# # inputs <- readRDS("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/IPSL-CM6A-LR/ssp126/grid_1_IPSL-CM6A-LR_ssp126.rds")
-# # ssp585 
-# # result_set <- readRDS("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/IPSL-CM6A-LR/ssp585/dbpm_output_all_1_ssp585.rds")
-# # inputs <- readRDS("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/IPSL-CM6A-LR/ssp585/grid_1_IPSL-CM6A-LR_ssp585.rds")
-# 
-# library("zoo")
-# num_years <- ceiling(dim(inputs$ts)[1]/48)
-# tss <- as.matrix(inputs$ts)
-# for(i in 1:(num_years-1)){ # First week of year is the yearly average, all other weeks are NA
-#   tss[((i-1)*48+1),-1]  <- colMeans(tss[c(((i-1)*48+1):(i*48)),-1])
-#   tss[c(((i-1)*48+2):(i*48)),-1] <- NA
-# }
-# tss[dim(tss)[1],-1] <- colMeans(tss[((num_years-1)*48+1):dim(tss)[1],-1])
-# tss[c(((num_years-1)*48+1):((dim(tss)[1]-1))),-1] <- NA
-# fwts<-data.frame(na.approx(tss))
-# spinup<-data.frame(sst=rep(mean(inputs$ts$sst[1:480]),each=300*48),sbt=rep(mean(inputs$ts$sbt[1:480]),each=300*48),er=rep(mean(inputs$ts$er[1:480]),each=300*48),
-#                    intercept=rep(mean(inputs$ts$intercept[1:480]),each=300*48),slope=rep(mean(inputs$ts$slope[1:480]),each=300*48),
-#                    sphy=rep(mean(inputs$ts$sphy[1:480]),each=300*48), lphy=rep(mean(inputs$ts$lphy[1:480]),each=300*48))
-# nrow(spinup)
-# fwts <- rbind(spinup, fwts[,-1])
-# inputs=list(depth=inputs$depth,ts=fwts)
-# rm(spinup)
-# isave <- seq(from=300*48, to=((dim(inputs$ts)[1])+1), by = 4) # 48 is weeks in a year; 4 is months in a year 
-# # isave <- seq(from=(300*48)+48, to=((dim(inputs$ts)[1])), by = 4)
-# length(isave) # 165 years for historical (or 1980 months); 85 for others (NOTE: the first year (or 12 month) are the last step of spinup)
-# grids<-grids[grids!=21747] # only when running historical - do not consider this grid becasue it's problematic and run on a more detailed time scale (X10 time steps)
-
 #### option 3 ----
 
-result_set <- readRDS(paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/",curr_esm,"/picontrol/dbpm_output_all_1_picontrol.rds"))
+result_set <- readRDS(paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/picontrol/dbpm_output_all_1_picontrol.rds"))
 isave_p<-1:dim(result_set$U)[2] 
-result_set <- readRDS(paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/",curr_esm,"/historical/dbpm_output_all_1_historical.rds"))
+result_set <- readRDS(paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/historical/dbpm_output_all_1_historical.rds"))
 isave_h<-1:dim(result_set$U)[2] 
-result_set <- readRDS(paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/",curr_esm,"/ssp126/dbpm_output_all_1_ssp126.rds"))
+result_set <- readRDS(paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/ssp126/dbpm_output_all_1_ssp126.rds"))
 isave_126<-1:dim(result_set$U)[2] 
-result_set <- readRDS(paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/",curr_esm,"/ssp585/dbpm_output_all_1_ssp585.rds"))
+result_set <- readRDS(paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/ssp585/dbpm_output_all_1_ssp585.rds"))
 isave_585<-1:dim(result_set$U)[2] 
 
 isave<- list(isave_p, isave_h, isave_126, isave_585) # picontrol needs to be added instead of historical if picontrol is run 
@@ -281,7 +251,7 @@ vars2make <- c('tcb', 'tpb', 'bp30cm', 'bp30to90cm',"bp90cm",'tdb','bd30cm', 'bd
 #### check ----
 
 library(ncdf4)
-nc <- nc_open("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/IPSL-CM6A-LR/netcdf/historical/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcblog10_global_monthly_1850_2014.nc")
+nc <- nc_open("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/netcdf/historical/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcblog10_global_monthly_1850_2014.nc")
 print(nc)
 lon <- ncvar_get(nc, "lon")
 lat <- ncvar_get(nc, "lat")
@@ -293,7 +263,7 @@ tcbh <- ncvar_get(nc, "tcblog10")
 dim(tcbh)
 tcbh[1:2,1:2,1:2,1:2]
 
-nc <- open.nc("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/IPSL-CM6A-LR/netcdf/ssp126/dbpm_ipsl_cm6a_lr_nobc_ssp126_nat_default_tcb_global_montly_2015_2100.nc4")
+nc <- open.nc("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/netcdf/ssp126/dbpm_ipsl_cm6a_lr_nobc_ssp126_nat_default_tcb_global_montly_2015_2100.nc4")
 tcb126 <- var.get.nc(nc, "tcb")
 max(tcb126, na.rm =TRUE)
 min(tcb126, na.rm =TRUE)
@@ -303,7 +273,7 @@ dim(tcb126)
 # problem with last time step.... need to CHECK why...
 tcb126<-tcb126[,,1:dim(tcb126)[3]-1]
 
-nc <- open.nc("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/IPSL-CM6A-LR/netcdf/ssp585/dbpm_ipsl_cm6a_lr_nobc_ssp585_nat_default_tcb_global_montly_2015_2100.nc4")
+nc <- open.nc("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/netcdf/ssp585/dbpm_ipsl_cm6a_lr_nobc_ssp585_nat_default_tcb_global_montly_2015_2100.nc4")
 tcb585 <- var.get.nc(nc, "tcb")
 tcb585[which(tcb585 == max(tcb585, na.rm =TRUE))]<-NA # this is 1e20
 image(tcb585[,,1031])
