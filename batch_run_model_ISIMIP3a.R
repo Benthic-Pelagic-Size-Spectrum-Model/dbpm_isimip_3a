@@ -20,8 +20,8 @@ library(tictoc)
 # scenario <- c("picontrol", "historical", "ssp126", "ssp585")
 
 # ISIMIP3a runs 
-esms <- c("obsclim", "ctrlclim", "spinup")
-scenario <- c("1deg") #, "0.25deg")
+esms <- c("obsclim")#, "ctrlclim", "spinup")
+scenario <- c("1deg")#, "0.25deg")
 
 source('runmodel_yearly.R') 
 
@@ -41,29 +41,33 @@ source('runmodel_yearly.R')
 # OK for ISMIP3b (checked)
 # WARNING - check isave in runmodel_yearly.r with Julia 
 
-# for(i in 1:length(esms)){ # Loop over esms
+for(curr_esm in esms){ # Loop over esms
   
-  i = 1 # ISIMIP3a - scenario - spinup 1deg started on 20 sept at 5pm. After 2.5 days (23 sept 9am) only 179 files over more than 41000! 
-  curr_esm <- esms[i]
-  
-  # load(list.files(path=paste("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, '/',  sep = ""), pattern = "*depth*", full.names = TRUE)) # Load esm depth file
-
-  # for(j in 1:(length(scenario)-2)){ # Loop over scenario
-  
-    j = 1
-
+  for(curr_scen in scenario){ # Loop over scenario
+    
+    # ISIMIP3a 
+    if(curr_esm == "spinup"){
+      input_loc <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/",curr_esm,"/",curr_scen,"/gridcell")
+      output_loc <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/",curr_scen,"/")
+    } else {
+      input_loc <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/",curr_esm,"/",curr_scen,"/gridcell")
+      output_loc <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",curr_esm,"/",curr_scen,"/")
+      input_loc_hist <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/spinup/",curr_scen,"/gridcell")
+      output_loc_hist <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/spinup/",curr_scen,"/")
+    }
+    
     # historical saved weekly outputs + spin up = 4.9T, 4 days to run (but on 25 cores)
     # picontrol saved montly outputs = 340G, 2.5 days to run on 45 cores  
-  
+    
     # new runs without temp effect on senescenace:
     # historical: montly outputs 2.2 days; need to run separately as you are also saving growth - and picontrol is not necessary at this stage. 
     # note that you can either use the dynamics_sizebased_model_function.R or the dynamics_sizebased_model_function_TempOnSenescence.R in runmodel_yearly.R  
-
+    
     # new runs without temp effect on senescenace and other mortalities for detritus. 
     # historical IPSL: montly outputs saving growth also, ~ 2.2 days
     # historical + picontrol GFDL: montly outputs saving growth also, ~ 7 not sure why so long (picontrol has a time dimention of 3012, hisitircal of 1980). 
     
-    curr_scen <- scenario[j]
+    # load(list.files(path=paste("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, '/',  sep = ""), pattern = "*depth*", full.names = TRUE)) # Load esm depth file
     
     # ISMIP3a - depth loading moved here as only one esm in reality
     # CN load depth file - one for all scenarios (obsclim and ctrlclim and therefore spinup)
@@ -74,15 +78,6 @@ source('runmodel_yearly.R')
                                sep = ""),
                     pattern = "*deptho*", full.names = TRUE))
     
-    
-    # input_loc <- paste("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, "/", curr_scen, "/", sep = "")
-    # output_loc <- paste("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/", curr_esm, "/", curr_scen, "/", sep = "") 
-    
-    # ISMIP3a 
-    input_loc <- paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/", curr_esm, "/", curr_scen, "/", "gridcell/",sep = "")
-    output_loc <- paste("/rd/gem/private/fishmip_outputs/ISIMIP3a/", curr_esm, "/", curr_scen, "/", sep = "")
-    
-    
     # set up cluster
     tic()
     numcores= detectCores()-1 #45 # gem48 has 48 cpu 
@@ -92,24 +87,29 @@ source('runmodel_yearly.R')
     # grids to read in are sequential for the depth file
     grids<-1:dim(depth)[1]
     # trial 
-    # grids<-1:10
+    # grids<-1
     
     ptm=proc.time()
     options(warn=-1)
     
-    parallel::clusterApply(cl,x=grids,fun=rungridsep, gcm = curr_esm, protocol = curr_scen, output = "partial",  
-                           input_files_location = input_loc, output_files_location = output_loc)
-    
+    if(curr_esm == "spinup"){
+      parallel::clusterApply(cl,x=grids,fun=rungridsep, gcm = curr_esm, protocol = curr_scen, output = "partial",  
+                             input_files_location = input_loc, output_files_location = output_loc)    
+    } else {
+      parallel::clusterApply(cl,x=grids,fun=rungridsep_ssp, gcm = curr_esm, protocol = curr_scen, output = "partial",  
+                             input_files_location = input_loc, output_files_location = output_loc,
+                             input_historical_location = input_loc_hist, output_historical_location = output_loc_hist)
+    }
     print((proc.time()-ptm)/60.0)
     
     stopCluster(cl)
     toc()
-  # }
+  }
+  
+}
 
-# }
-    
-# q <- readRDS("/rd/gem/private/fishmip_outputs/ISIMIP3a/obsclim/1deg/dbpm_output_all_10000_1deg.rds")
-    
+obsim <- readRDS("/rd/gem/private/fishmip_outputs/ISIMIP3a/obsclim/1deg/dbpm_output_all_10000_1deg.rds")
+
 # ### projections protocols ssp ----
 #     
 #  for(i in 1:length(esms)){ # Loop over esms
@@ -549,4 +549,3 @@ dim(result_set_h$U)
 #                        input_files_location = input_loc, output_files_location = output_loc)
 # print((proc.time()-ptm)/60.0)
 # stopCluster(cl)
-    
