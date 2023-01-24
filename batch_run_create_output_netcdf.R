@@ -1,4 +1,3 @@
-
 #----------------PUT FISH_MIP MODEL OUTPUTS INTO netcdf 4
 
 rm(list=ls())
