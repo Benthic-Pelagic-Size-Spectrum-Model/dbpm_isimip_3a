@@ -1,5 +1,6 @@
 # CN this is an updated file from Ryan to run the model in parallel.
-# it calls runmodel_yearly.R (or runmodel.R, depending on whether you need to run yearly or monthly). NOTE: You might need to load these files from Ryan's folder too. 
+# it calls runmodel_yearly.R (or runmodel.R, depending on whether you need to run yearly or monthly). 
+# NOTE: You might need to load these files from Ryan's folder too. 
 # in Julia's older version, this codes is included in runmodel_calls.r but it's very different!
 
 #### STEP 3: RUN THE MODEL
@@ -13,32 +14,18 @@ rm(list=ls())
 # install.packages("zoo")
 library(zoo)
 library(parallel)
-library(tictoc)
-
-# ISIMIP3b runs 
-# esms <- c("GFDL-ESM4", "IPSL-CM6A-LR")
-# scenario <- c("picontrol", "historical", "ssp126", "ssp585")
 
 # ISIMIP3a runs 
-esms <- c("obsclim")#, "ctrlclim", "spinup")
+esms <- c("ctrlclim")#, "", "spinup","obsclim")
 scenario <- c("1deg")#, "0.25deg")
 
 source('runmodel_yearly.R') 
 
-# igrid <-1
-# readRDS("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/GFDL-ESM4/historical/grid_1_GFDL-ESM4_historical.rds") # try reading file 
-# gcm = curr_esm 
-# protocol = curr_scen
-# output = "partial"
-# input_files_location = input_loc 
-# output_files_location = output_loc
-
-### protocols requiring spin up ----
+### rungridsep loop ----
 
 # for ISIMIP3a this would be the spinup 
 # WARNING - if you want to re-run the model, you need to delete all previously created files in folder
 # because of this line: if(length(curr_grid_input) > 0 & length(curr_grid_output) == 0){ # If current grid has not been run, and inputs exist for it, run model on current grid
-# OK for ISMIP3b (checked)
 # WARNING - check isave in runmodel_yearly.r with Julia 
 
 for(curr_esm in esms){ # Loop over esms
@@ -79,8 +66,7 @@ for(curr_esm in esms){ # Loop over esms
                     pattern = "*deptho*", full.names = TRUE))
     
     # set up cluster
-    tic()
-    numcores= detectCores()-1 #45 # gem48 has 48 cpu 
+    numcores= detectCores()-1 
     
     cl <- makeForkCluster(getOption("cl.cores", numcores))
     
@@ -103,66 +89,185 @@ for(curr_esm in esms){ # Loop over esms
     print((proc.time()-ptm)/60.0)
     
     stopCluster(cl)
-    toc()
   }
   
 }
 
+#check 
 obsim <- readRDS("/rd/gem/private/fishmip_outputs/ISIMIP3a/obsclim/1deg/dbpm_output_all_10000_1deg.rds")
 
-# ### projections protocols ssp ----
-#     
-#  for(i in 1:length(esms)){ # Loop over esms
-#   
-#   i = 1  
-#   curr_esm <- esms[i]
-#   
-#   load(list.files(path=paste("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, '/',  sep = ""), pattern = "*depth*", full.names = TRUE)) # Load esm depth file
-#   
-#   for(j in 3:length(scenario)){ # Loop over scenario
-#     
-#     # ssp126 saved weekly outputs starting from last historical week = 13 h to run; 117G  
-#     # ssp585 saved weekly outputs starting from last historical week = 12 h to run; 117G 
-#     
-#     # runs without temperature effect on senescence - see above. both ssp/s
-#     # saved weekly outputs starting from last historical week = 25 h to run together
-#     
-#     # run without temp effect on senescence and on detritus other mortalities 
-#     # strange error with GFDL: I rerun teh code and only 2 grid cells are now not run , but the error still remains. If run one by one grid cell, it all seems OK
-#     # Error in checkForRemoteErrors(val) : 
-#     #   15 nodes produced errors; first error: invalid 'description' argument
-#     j = 4 
-#     
-#     curr_scen <- scenario[j]
-#     
-#     input_loc <- paste("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, "/", curr_scen, sep = "")
-#     output_loc <- paste("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/", curr_esm, "/", curr_scen, sep = "") 
-#     output_loc_hist <- paste("/../../rd/gem/private/fishmip_outputs/ISIMIP3b/", curr_esm, '/historical', sep = "")
-#     input_loc_hist <- paste("/../../rd/gem/private/fishmip_inputs/ISIMIP3b/", curr_esm, '/historical', sep = "")
-#     
-#     # set up cluster
-#     numcores= 45 # 48 cpu 
-#     
-#     cl <- makeForkCluster(getOption("cl.cores", numcores))
-#     
-#     # grids to read in are sequential for the depth file
-#     grids<-1:dim(depth)[1]
-#     # not for second run 
-#     # grids<-grids[grids!=21747] # this is the only grid from the historical run with greater size dimentions, meaning that result_set$notrun == TRUE
-#     # see why this grid could be problematic below 'check time dimention of outputs in historical'
-#     
-#     ptm=proc.time()
-#     options(warn=-1)
-#     
-#     parallel::clusterApply(cl,x=grids,fun=rungridsep_ssp, gcm = curr_esm, protocol = curr_scen, output = "partial",  
-#                            input_files_location = input_loc, output_files_location = output_loc, 
-#                            input_historical_location = input_loc_hist, output_historical_location = output_loc_hist)
-#     
-#     print((proc.time()-ptm)/60.0)
-#   
-#     stopCluster(cl)
-#    }
-# }
+### ISMIP3a - explore effect of senescence and fix 'bug' which increases biomass ----
+
+rm(list=ls())
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(patchwork)
+
+# the function below
+    # uploaads outputs from 1 (specified) grid cell,
+    # runs the model for the same grid cell using a different dynamic_sizebased_model_functions.R
+    # saves the new run in output_loc_trial (rd/gem/private/fishmip_outputs/temp_trials/) which is different from the path to the original runs,
+    # so you are not overwriting original files.
+    # plots biomass trends, size-spcrea and growth for the 2 (original ad new) runs
+# Steps
+    # 1 - delete files in temp_trials otherwise the function sees taht the grid cell has already been run
+    # 2 - specify the dynamic_sizebased_model_functions.R that you want ot use and commnet the dynamic_sizebased_model_functions.R inside runmodel_yearly.r
+
+compare_senarios<-function(grids){
+
+  # trial
+  # grids = 22430
+
+  plot_grid<-function(result_set_h,
+                    result_set_585,
+                    result_set_126,
+                    input_h,
+                    input_585,
+                    input_126){
+
+  # pelagic for all scenarios
+  U_h<-as_data_frame(result_set_h$U) %>%
+    mutate(bin =result_set_h$x,
+           period = "hist") %>%
+    `colnames<-`(c(seq(1, ncol(result_set_h$U)),"bin", "period")) %>%
+    gather(step, bioU, -bin, -period)
+
+  U_585<-as_data_frame(result_set_585$U) %>%
+    mutate(bin =result_set_585$x,
+           period = "585")%>%
+    `colnames<-`(c(seq(ncol(result_set_h$U)+1 ,(ncol(result_set_585$U) + ncol(result_set_h$U))),"bin", "period")) %>%
+    gather(step, bioU, -bin, -period)
+
+  U_126<-as_data_frame(result_set_126$U) %>%
+    mutate(bin =result_set_126$x,
+           period = "126")%>%
+    `colnames<-`(c(seq(ncol(result_set_h$U)+1 ,(ncol(result_set_126$U) + ncol(result_set_h$U))),"bin", "period")) %>%
+    gather(step, bioU, -bin, -period)
+
+  U<-U_h %>%
+    full_join(U_126) %>%
+    full_join(U_585)
+
+  # demersal for all scenarios
+  V_h<-as_data_frame(result_set_h$V) %>%
+    mutate(bin =result_set_h$x,
+           period = "hist") %>%
+    `colnames<-`(c(seq(1, ncol(result_set_h$V)),"bin", "period")) %>%
+    gather(step, bioV, -bin, -period)
+
+  V_585<-as_data_frame(result_set_585$V) %>%
+    mutate(bin =result_set_585$x,
+           period = "585")%>%
+    `colnames<-`(c(seq(ncol(result_set_h$V)+1 ,(ncol(result_set_585$V) + ncol(result_set_h$V))),"bin", "period")) %>%
+    gather(step, bioV, -bin, -period)
+
+  V_126<-as_data_frame(result_set_126$V) %>%
+    mutate(bin =result_set_126$x,
+           period = "126")%>%
+    `colnames<-`(c(seq(ncol(result_set_h$V)+1 ,(ncol(result_set_126$V) + ncol(result_set_h$V))),"bin", "period")) %>%
+    gather(step, bioV, -bin, -period)
+
+  V<-V_h %>%
+    full_join(V_126) %>%
+    full_join(V_585)
+
+  # all Biomass
+  biomass<-U %>% full_join(V)
+  biomass<-biomass %>%
+    gather(trait, bio, -c(bin, step, period) )
+
+  # spectrum
+  plot_spectrum<-ggplot(filter(biomass, bio>0, step == max(as.numeric(biomass$step))-1),
+                        aes(x=bin, y=log10(bio), group = trait, color = trait))+
+    geom_line()+
+    facet_wrap(~period)
+
+  # calcualte tcb as per netcdf outputs
+  biomass_time<-biomass %>%
+    filter(bin>=-7) %>%
+    mutate(bio = bio*0.1*10^bin) %>% # this should be as bove TotalUbiomass and Totalvbiomass
+    mutate(step = as.numeric(step)) %>%
+    group_by(step, period) %>%  # trait
+    dplyr::summarise(bio = sum(bio))
+
+  # add temperature
+  temp_h<-input_h$ts[,c(1,2)] %>%
+    mutate(period = "hist") %>%
+    select(-t) %>%
+    mutate(step = c(rep(1:(nrow(input_h$ts)/4), each = 4),NA)) %>% # yearly mean
+    group_by(step,period) %>%
+    dplyr::summarise(sst = mean(sst, na.rm=TRUE))
+
+  temp_585<-input_585$ts[,c(1,2)] %>%
+    mutate(period = "585") %>%
+    select(-t) %>%
+    mutate(step = c(rep(1:(nrow(input_585$ts)/4), each = 4), NA)) %>% # yearly mean
+    group_by(step, period) %>%
+    dplyr::summarise(sst = mean(sst, na.rm=TRUE)) %>%
+    ungroup() %>%
+    mutate(step = step+nrow(temp_h))
+
+  temp_126<-input_126$ts[,c(1,2)] %>%
+    mutate(period = "126") %>%
+    select(-t) %>%
+    mutate(step = c(rep(1:(nrow(input_126$ts)/4), each = 4), NA)) %>% # montly mean
+    group_by(step, period) %>%
+    dplyr::summarise(sst = mean(sst, na.rm=TRUE)) %>%
+    ungroup() %>%
+    mutate(step = step+nrow(temp_h))
+
+  temp<-temp_h %>% full_join(temp_585) %>%  full_join(temp_126)
+
+  # plot trends
+  # NOTE - temp need to be adjusted - don't know how ... maybe as per model?
+  plot_tcb<-ggplot(biomass_time, aes(x=step, y=bio, color = period))+
+    geom_line()
+
+  plot_temp<-ggplot(temp, aes(x=step, y=sst, color = period))+
+    geom_smooth()
+
+  # plot_trend<-plot_tcb/plot_temp
+
+  # growth from historical
+  GU<-as_data_frame(result_set_h$GGU) %>%
+    mutate(bin =result_set_h$x) %>%
+    `colnames<-`(c(seq(1, ncol(result_set_h$GGU)),"bin")) %>%
+    gather(step, GU, -bin)
+  GV<-as_data_frame(result_set_h$GGV) %>%
+    mutate(bin =result_set_h$x) %>%
+    `colnames<-`(c(seq(1, ncol(result_set_h$GGV)),"bin")) %>%
+    gather(step, GV, -bin)
+
+  growth<-GU %>% full_join(GV) %>%
+    gather(trait, growth, -c(bin, step)) %>%
+    filter(bin >= -7)
+
+  # try your code
+  plot_growth<-ggplot(filter(growth, step == max(as.numeric(step))-1), aes(x=bin, y=log10(growth), group = trait, color = trait))+
+    geom_line()+
+    facet_wrap(~trait, ncol=2)
+
+  return(list(plot_spectrum = plot_spectrum, plot_tcb = plot_tcb, plot_temp = plot_temp, plot_growth = plot_growth, biomass_time = biomass_time, temp = temp, biomass = biomass, growth = growth))
+
+}
+
+
+  # inputs same for both scenarios (no senescence and senescence)
+  input_585<-readRDS(paste0("/../../rd/gem/private/fishmip_inputs/ISIMIP3a/IPSL-CM6A-LR/ssp585/grid_",grids,"_IPSL-CM6A-LR_ssp585.rds"))
+  input_126<-readRDS(paste0("/../../rd/gem/private/fishmip_inputs/ISIMIP3a/IPSL-CM6A-LR/ssp126/grid_",grids,"_IPSL-CM6A-LR_ssp126.rds"))
+  input_h<-readRDS(paste0("/../../rd/gem/private/fishmip_inputs/ISIMIP3a/IPSL-CM6A-LR/historical/grid_",grids,"_IPSL-CM6A-LR_historical.rds"))
+
+  # original NO temp effect on senescence but temp effect on Om:
+  result_set_585<-readRDS(paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/ssp585/dbpm_output_all_",grids,"_ssp585.rds"))
+  result_set_126<-readRDS(paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/ssp126/dbpm_output_all_",grids,"_ssp126.rds"))
+  result_set_h<-readRDS(paste0("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/historical/dbpm_output_all_",grids,"_historical.rds"))
+
+  res_or<-plot_grid(result_set_h, result_set_585,result_set_126, input_h, input_585, input_126)
+
+}
+
 
 # ### ISMIP2b - explore effect of senescence and fix 'bug' which increases biomass ----
 # 
