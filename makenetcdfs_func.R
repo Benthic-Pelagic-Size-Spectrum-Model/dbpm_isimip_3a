@@ -68,7 +68,28 @@ mknetcdf<-function(varname, protocol, inputpath, datapath, savetopath, grids, is
   # we don't need to differentiate between clim and others
   # we changed name and acronisms
   # name <- paste(savetopath, protocol, "/dbpm_ipsl_", varname, "_global_annual.nc4", sep = "")
-  name <- paste(savetopath, "/dbpm_ipsl_cm6a_lr_", "nobasd_", protocol, "_nosoc_default_", "disaggregated_", varname, "_global_montly_", yearRange, ".nc4", sep = "") # according to protocol see below 
+  name <- paste(savetopath, "/dbpm_ipsl_cm6a_lr_", "nobasd_", protocol, 
+                "_nosoc_default_", "disaggregated_", varname, "_global_montly_", 
+                yearRange, ".nc4", sep = "") # according to protocol see below 
+  
+  <model>_<climate-forcing>_<climate-scenario>_<soc-scenario>_<sens-scenario>_
+  <variable>_<region>_<time-step>_<start-year>_<end-year>.nc
+  
+  dbpm # model
+  gfdl-mom6-cobalt2 # climate forcing
+  obsclim or ctrlclim or spinup# climate scenario
+  nat#soc scenario wihtout fishing
+  histsoc # soc scenario with fishing
+  60arcmin#sens scenario 1deg resolution
+  15arcmin # sens scenario 0.25 resolution   #protocol to be checked online cause different
+  tcb or other biological stuff # variable
+  global # region
+  monthly #time_step
+  1841_1960#start year spinup # double check
+  1961_2010 # year obsclim and ctrlclim
+
+  # variable
+  
   
   # nc_names <- c(name1, name2)
   
@@ -308,7 +329,8 @@ mknetcdf_agg<-function(varname, protocol, inputpath, datapath, savetopath, grids
   
   # fix Matthias 
   # nc_names <- paste(savetopath, protocol,"/dbpm_ipsl-cm6a-lr_", "nobasd_", protocol, "_nat_default_",varname, "_global_monthly_", yearRange, ".nc", sep = "") 
-  nc_names <- paste(savetopath,"dbpm_", tolower(curr_esm), "_nobasd_", protocol, "_nat_default_",varname, "_global_monthly_", yearRange, ".nc", sep = "") 
+  nc_names <- paste(savetopath,"dbpm_", tolower(curr_esm), "_nobasd_", protocol, 
+                    "_nat_default_",varname, "_global_monthly_", yearRange, ".nc", sep = "") 
   
   # pb = txtProgressBar(min = 0, max = length(grids), initial = 1, style = 3) # Initial progress bar
   
@@ -515,6 +537,8 @@ mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, gr
   # curr_esm = curr_esm
   
   # see mknetcdf_agg() above for comments 
+  
+  #TODO check lat/lon
   if(curr_esm == "IPSL-CM6A-LR"){
     lon<- -180:179
   }else{
@@ -523,10 +547,21 @@ mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, gr
   
   lat<- 89.5:-89.5
   
+  if(curr_scen == "1deg"){
+    lon<- -179.5:179.5 # they should both be -179.5:179.5 but you've run IPSL with the old grid 
+    lat<- -89.5:89.5 
+    
+  }else{ #TODO need to check for .25 deg
+    lon<- -179.5:179.5 
+    lat<- 77.5:-89.5
+  }
+  
+  
   t<-1:length(isave)  
   
   # time starts from 1601 and is given in months - matthias fix
-  # add months since 1601 as this is the ISIMIP starting date convention    
+  # add months since 1601 as this is the ISIMIP starting date convention  
+  #TODO check year range
   if (yearRange == "2015_2100") {
     months_since_1601 = ((2015-1601)*12) -1 # data in future starts in 2015 - it works in terms of year and month
   }else {months_since_1601 = ((1850-1601)*12) -1} # data in historical starts in 1980

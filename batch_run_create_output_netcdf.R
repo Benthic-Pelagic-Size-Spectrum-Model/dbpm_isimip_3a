@@ -231,9 +231,20 @@ j = 1
 # re-run both with correct values - should take little time
 # OK worked, 1h historical and 0.5h ssp585
 
-# prots <-c("historical","ssp585")    
-# isave<- list(isave_h, isave_585) 
-# yearRange<- c('1850_2014', '2015_2100')
+iScen <- 1
+iESM <- 1
+curr_esm <- esms[iESM]
+curr_scen <- scenarios[iScen]
+
+prots <- scenarios
+yearRange<- c("1841_1960","1961_2010","1961_2010")
+names(yearRange) <- esms
+
+result_set <- readRDS(paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",
+                             curr_esm,"/",curr_scen,"/","dbpm_output_all_1_",curr_scen,".rds"))
+isave<-1:dim(result_set$U)[2] 
+
+# check with Cami right isave, iScen and iESM
 
 # install.packages("tidyverse") # long process ... 
 # library("tidyverse") # checking for Julia ... 
@@ -242,9 +253,10 @@ j = 1
 
 ptm=proc.time()
 options(warn=-1)
-print(paste('Now working on ', "tcblog10", ' for protocol ', prots[j], " ", curr_esm, sep = ''))
-mknetcdf_agg_sp("tcblog10", prots[j], input_loc, output_loc, save_loc, grids, other_param, isave[[j]] ,yearRange[j], curr_esm)
+print(paste('Now working on ', "tcblog10", ' for protocol ', prots[iScen], " ", curr_esm, sep = ''))
+mknetcdf_agg_sp("tcblog10", prots[iScen], input_loc, output_loc, save_loc, grids, other_param, isave[[j]] ,yearRange[iESM], curr_esm)
 print((proc.time()-ptm)/60.0)
+
 
 # }
 
