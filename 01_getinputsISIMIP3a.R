@@ -13,6 +13,8 @@ rm(list=ls())
 # use LME inputs provided by Ryan on 25/07/2022
 # NOTE: we are using only 0.25deg inputs as these are best when calculating means across LMEs. 
 
+rm(list=ls())
+
 library(raster)
 library(stringr)
 library(tidyverse)
@@ -614,13 +616,23 @@ library(tictoc)
 library(data.table)
 library(parallel)
 
+
+rm(list=ls())
+
+library(raster)
+library(stringr)
+library(tidyverse)
+library(tictoc)
+library(data.table)
+library(parallel)
+
 #### 1. Define main function: for each LME, and each variable, apply the calc_inputs_LME function -----
 
 # 1A. calc_inputs_LME()
 # see function description above - this is adjusted for gridcell level but names are kept - hence e.g. weighted_mean_obs
 calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_path_obs){
   
-  # # # trial
+  # # trial
   # i = 2
   # file_name_obs = lme_obs[[i]]
   # file_name_crtl = lme_ctrl[[i]]
@@ -628,7 +640,7 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
   # file_path_obs = file_path_obs
 
   # extract variable name
-  # NOTE both 1deg and 0.25deg should be consideded - now considering only 1deg but will need to add 0.25deg
+  # NOTE both 1deg and 0.25deg should be considered - now considering only 1deg but will need to add 0.25deg
   variable<-str_match(file_name_obs, "gfdl-mom6-cobalt2_obsclim_\\s*(.*?)\\s*_onedeg")[2]
   # variable<-str_match(file_name_obs, "gfdl-mom6-cobalt2_obsclim_\\s*(.*?)\\s*_15arcmin")[2]
   
@@ -637,6 +649,9 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
   
   # then work on OBSERVED 
   lme<-read.csv(file.path(file_path_obs, file_name_obs))
+  
+  # NOTE - through the code "weighed_mean" is only because of code recycling from LME-aggregated level approach above 
+  # here we are considering grid cells so there is no averadging and weighting  
   
   if (variable == "deptho_m"){
     
@@ -663,16 +678,25 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
     
     # calculate spinup which will then be used for the observed
     
-    #### WARNING check the Year dimnetions and that 12*ncol(lme_crtl) is the right appraoch .......
-    
-    
-    
-    
-    
+    # CHECK the Year dimension and that 12*ncol(lme_crtl) is the right approach
+    # OK step by step + plot of values below 
+  
     spinup<-weighted_mean_crtl %>%
       select(-Date) %>% 
-      filter(Year >= 1961, Year <=1980) %>% 
-      slice(rep(1:n(), times = 6)) %>%
+      filter(Year >= 1961, Year <=1980) 
+    
+    # 6 cycles of 20 years - here you are just repeating the spinup above for 6 times
+    spinup<-spinup %>% 
+      slice(rep(1:n(), times = 6))
+    
+    # change the date on the 6 cycles above to cover the whole spinup period
+    # you only need to change the years as months are the same for each year
+    # dimensions to consider are years, months and coordinates 
+    # years: 1841:1960
+    # months: 12
+    # coordinates: nrow(lme_crtl) which gives the number of unique lat/lon combinations fixed across year/month
+    # rep(1841:1960, each = 12*nrow(lme_crtl))
+    spinup<-spinup %>% 
       mutate(Year = as.character(rep(1841:1960, each = 12*nrow(lme_crtl))), 
              Date = lubridate::my(paste(Month,Year, sep = "." ))) 
     
@@ -680,6 +704,20 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
     weighted_mean_crtl_final<-weighted_mean_crtl %>% 
       full_join(spinup) %>% 
       arrange(Date)
+    
+    # ## CHECK (based on LME 14)
+    # # it looks OK 
+    # head(weighted_mean_crtl_final)
+    # plot<-weighted_mean_crtl_final %>% 
+    #   filter(lat == -34.5, lon == -53.5) %>% 
+    #   group_by(Year) %>% 
+    #   summarise(mean = mean(value)) %>% 
+    #   ungroup() %>% 
+    #   mutate(Year = as.numeric(Year))
+    # 
+    # ggplot(plot, aes(x = Year, y = mean))+
+    #   geom_point()+
+    #   geom_line()
     
     # reorder columns 
     weighted_mean_crtl_final<-weighted_mean_crtl_final[,c("lat","lon","LME", "Date", "Year", "Month", "value")]
@@ -724,7 +762,7 @@ source("input_funcs.R")
 calc_inputs_all_LME<-function(this_LME){
   
   # # trial 
-  # this_LME = 1
+  # this_LME = 14
   
   ## WARNING - you need to add the 0.25deg option later on - i.e. ifelse()
   file_path_obs<-"/rd/gem/private/fishmip_inputs/ISIMIP3a/lme_inputs/obsclim/1deg"
@@ -756,11 +794,24 @@ calc_inputs_all_LME<-function(this_LME){
   
   # METHOD 1 - much faster but less reliable 
   tic()
-  output_obs_all_variables2<-Reduce(cbind,output_obs[2:6])
+  # reduce from list to df and column bind all inputs from loop above 
+  # except for depth and grid cell area which do not have date 
+  output_obs_all_variables2<-Reduce(cbind,output_obs[2:6]) 
   # colnames(output_obs_all_variables2)
+  # head(output_obs_all_variables2)
+  # head(output_obs[[5]]) # random check 
+  # lat, lon, LME, Date, Year, Month are repeated so need to remove these column repetitions 
   output_obs_all_variables2<-output_obs_all_variables2[,c(1,2,3,4,5,6,7,14,21,28,35)]
-  output_obs_all_variables2<-merge(output_obs_all_variables2, output_obs[1])
+  # merge depth and grid cell area (the first output of the loop above) by lat/lon
+  # trial<-output_obs_all_variables2 %>% full_join(output_obs[[1]])
+  # trial<- trial %>% arrange(lat, lon, Date)
+  output_obs_all_variables2<-merge(output_obs_all_variables2, output_obs[[1]])
   output_obs_all_variables2<- output_obs_all_variables2 %>% arrange(lat, lon, Date)
+  # # CHECK the 2 approaches too - OK
+  # head(trial)
+  # head(output_obs_all_variables2)
+  # tail(trial)
+  # tail(output_obs_all_variables2)
   toc() # 4 sec
 
   # METHOD 2 
@@ -779,7 +830,7 @@ calc_inputs_all_LME<-function(this_LME){
   output_crtl_all_variables2<-Reduce(cbind,output_crtl[2:6])
   # colnames(output_crtl_all_variables2)
   output_crtl_all_variables2<-output_crtl_all_variables2[,c(1,2,3,4,5,6,7,14,21,28,35)]
-  output_crtl_all_variables2<-merge(output_crtl_all_variables2, output_crtl[1])
+  output_crtl_all_variables2<-merge(output_crtl_all_variables2, output_crtl[[1]])
   output_crtl_all_variables2<- output_crtl_all_variables2 %>% arrange(lat, lon, Date)
   toc() # 4 sec
   
@@ -795,24 +846,21 @@ calc_inputs_all_LME<-function(this_LME){
   
   ### steps 4 and 7 in LME scale 1 are now moved in this function for LME scale 2 as the final output is LME files and not one aggregated final file. 
   ### steps 3, 5, 6, 8 not needed here
-  
-  
-  
-  
-  #### WARNING - check the function once more !!!!!! 
-  
-  
-  
-  
-  
-  
-  
-  
+ 
   # OBSERVED 
-  output_obs_all_variables<-output_obs_all_variables %>% 
+  output_obs_all_variables3<-output_obs_all_variables %>% 
     mutate(sphy = `phypico-vint_mol_m-2`, 
            lphy = `phyc-vint_mol_m-2` - `phypico-vint_mol_m-2`) %>% 
     select(-c(`phyc-vint_mol_m-2`,`phypico-vint_mol_m-2`))
+  
+  # # CHECK (LME 14 considered)
+  # head(output_obs_all_variables)
+  # head(output_obs_all_variables3)
+  # # lphy = phyc-vint_mol_m-2 - phypico-vint_mol_m-2 ? YES
+  # # LME 24 as example 
+  # 0.28806272 - 0.14509845 = 0.1429643
+  # 0.05377120 - 0.04137433 = 0.01239687
+  output_obs_all_variables<- output_obs_all_variables3
   
   output_obs_all_variables_renamed<-output_obs_all_variables %>% 
     select(lat, lon, LME, Date, m, area_m2, `expc-bot_mol_m-2_s-1`, tob_degC, tos_degC, sphy, lphy) %>% 
@@ -820,21 +868,71 @@ calc_inputs_all_LME<-function(this_LME){
   
   output_obs_all_variables_renamed<-output_obs_all_variables_renamed[,c("lat","lon","LME", "t", "lphy", "sphy", "sbt", "sst", "depth", "area_m2", "expcbot")]
   
-  # dplyr method
+  # # dplyr method
+  # # WARNING this is wrong but I don't know why 
+  # output_obs_all_variables_slope<-output_obs_all_variables_renamed %>%
+  #   mutate(er = getExportRatio(sphy,lphy,sst,depth),
+  #          er = ifelse(er<0,0, ifelse(er>1,1,er)),
+  #          intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
+  #          slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+  #   relocate("lat","lon","LME","t","sst","sbt","er","intercept","slope", "sphy", "lphy", "depth", "area_m2","expcbot")
+  # 
+  # head(output_obs_all_variables_slope)
+  # 
+  # # check that function works (LME 14 considered): IT DOES NOT! REPLACE with below
+  # output_obs_all_variables_slope[1,c("intercept","slope", "sphy","lphy", "depth" )]
+  # sphy = 0.1450984
+  # lphy = 0.1429643
+  # depth = 111.0009
+  # GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept")
+  # # [1] -0.7724439
+  # GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")
+  # # [1] -1.001304
+  
   output_obs_all_variables_slope<-output_obs_all_variables_renamed %>%
-    mutate(er = getExportRatio(sphy,lphy,sst,depth),
-           er = ifelse(er<0,0, ifelse(er>1,1,er)),
-           intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
-           slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+    group_by(lat,lon,LME,t,lphy,sphy,sbt,sst,depth,area_m2,expcbot) %>%
+    summarise(
+      er = getExportRatio(sphy,lphy,sst,depth),
+      er = ifelse(er<0,0, ifelse(er>1,1,er)),
+      intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
+      slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+    ungroup() %>% 
     relocate("lat","lon","LME","t","sst","sbt","er","intercept","slope", "sphy", "lphy", "depth", "area_m2","expcbot")
   
-  head(output_obs_all_variables_slope)
+  # # check that function works: (LME 14 considered) # OK
+  # output_obs_all_variables_slope[1,c("intercept","slope", "sphy","lphy", "depth","sst","er")]
+  # # intercept slope  sphy  lphy depth   sst    er
+  # # <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl>
+  # #    -0.772 -1.00 0.145 0.143  111.  7.95 0.239
+  # sphy = 0.1450984
+  # lphy = 0.1429643
+  # depth = 111.0009
+  # sst = 7.948583
+  # getExportRatio(sphy,lphy,sst,depth)
+  # # [1] 0.2385618
+  # GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept")
+  # # [1] -0.7724439
+  # GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")
+  # # [1] -1.001304
+  
+  ### can we have negative intercepts? yes as her eis in log scale but back-transformed inside model code. 
   
   # CONTROL  
-  output_crtl_all_variables<-output_crtl_all_variables %>% 
+  output_crtl_all_variables3<-output_crtl_all_variables %>% 
     mutate(sphy = `phypico-vint_mol_m-2`, 
            lphy = `phyc-vint_mol_m-2` - `phypico-vint_mol_m-2`) %>% 
     select(-c(`phyc-vint_mol_m-2`,`phypico-vint_mol_m-2`))
+  
+  # # CHECK
+  # head(output_crtl_all_variables)
+  # head(output_crtl_all_variables3)
+  # # phyc-vint_mol_m-2 - phypico-vint_mol_m-2 = lphy? YES
+  # # NOTE these values are the same as spin up is calcualted using crtl and added to both crtl and obs
+  # # LME 24 as example
+  # 0.28806272 - 0.14509845 = 0.1429643
+  # 0.05377120 - 0.04137433 = 0.01239687
+  
+  output_crtl_all_variables<-output_crtl_all_variables3
   
   output_crtl_all_variables_renamed<-output_crtl_all_variables %>% 
     select(lat, lon, LME, Date, m, area_m2, `expc-bot_mol_m-2_s-1`, tob_degC, tos_degC, sphy, lphy) %>% 
@@ -842,16 +940,46 @@ calc_inputs_all_LME<-function(this_LME){
   
   output_crtl_all_variables_renamed<-output_crtl_all_variables_renamed[,c("lat","lon","LME", "t", "lphy", "sphy", "sbt", "sst", "depth", "area_m2", "expcbot")]
   
-  # dplyr method
+  # # dplyr method
+  # # WARNING this is wrong but I don't know why (as above - replace with group_by())
+  # output_crtl_all_variables_slope<-output_crtl_all_variables_renamed %>%
+  #   mutate(er = getExportRatio(sphy,lphy,sst,depth),
+  #          er = ifelse(er<0,0, ifelse(er>1,1,er)),
+  #          intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
+  #          slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+  #   relocate("lat","lon","LME","t","sst","sbt","er","intercept","slope", "sphy", "lphy", "depth", "area_m2","expcbot")
+  # 
+  # head(output_crtl_all_variables_slope)
+  
+  # Update function as per above 
+  # head(output_crtl_all_variables_renamed)
   output_crtl_all_variables_slope<-output_crtl_all_variables_renamed %>%
-    mutate(er = getExportRatio(sphy,lphy,sst,depth),
-           er = ifelse(er<0,0, ifelse(er>1,1,er)),
-           intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
-           slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+    group_by(lat,lon,LME,t,lphy,sphy,sbt,sst,depth,area_m2,expcbot) %>% 
+    summarise(
+      er = getExportRatio(sphy,lphy,sst,depth),
+      er = ifelse(er<0,0, ifelse(er>1,1,er)),
+      intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
+      slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>%
+    ungroup() %>% 
     relocate("lat","lon","LME","t","sst","sbt","er","intercept","slope", "sphy", "lphy", "depth", "area_m2","expcbot")
-  
-  head(output_crtl_all_variables_slope)
-  
+
+  # # check that function works: (LME 14 considered) # OK
+  # output_crtl_all_variables_slope[1,c("intercept","slope", "sphy","lphy", "depth","sst","er")]
+  # # intercept slope  sphy  lphy depth   sst    er
+  # # <dbl> <dbl> <dbl> <dbl> <dbl> <dbl> <dbl>
+  # #    -0.772 -1.00 0.145 0.143  111.  7.95 0.239
+  # sphy = 0.145
+  # lphy = 0.143
+  # depth = 111
+  # sst = 7.95
+  # getExportRatio(sphy,lphy,sst,depth)
+  # # 0.2386281
+  # GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept")
+  # # -0.771882
+  # GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")
+  # # -1.001223
+  # # NOTE sama as a bove because same spin-up, decimal different becasue some are omitted here
+
   # write output files 
   
   ## WARNING - you need to add the 0.25deg option later on - i.e. ifelse()
@@ -866,6 +994,9 @@ calc_inputs_all_LME<-function(this_LME){
 #### 2. apply the functions above to each LME -----
 
 this_LME = seq(1:66)
+
+# # trial to understand intercept issue
+# this_LME = 14
 
 tic()
 for (i in 1:length(this_LME)){
