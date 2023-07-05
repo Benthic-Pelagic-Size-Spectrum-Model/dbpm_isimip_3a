@@ -1005,6 +1005,45 @@ for (i in 1:length(this_LME)){
 }
 toc() # 6585.733 /60 = 109 min
 
+
+### check outputs
+
+# when rinning function above 
+# LME 14 - output_obs_all_variables_slope (output_obs_all_variables_slope is the same for spin-ip)
+
+# lat   lon LME   t            sst   sbt    er intercept  slope   sphy    lphy depth     area_m2       expcbot
+# <dbl> <dbl> <chr> <date>     <dbl> <dbl> <dbl>     <dbl>  <dbl>  <dbl>   <dbl> <dbl>       <dbl>         <dbl>
+# 1 -54.5 -64.5 14    1841-01-01  7.95  7.88 0.239    -0.772 -1.00  0.145  0.143    111. 7179721107. 0.000000202  
+# 2 -54.5 -64.5 14    1841-02-01  8.43  8.41 0.245    -0.789 -0.991 0.108  0.120    111. 7179721107. 0.000000154  
+# 3 -54.5 -64.5 14    1841-03-01  8.39  8.38 0.247    -0.862 -0.989 0.0878 0.0994   111. 7179721107. 0.000000106  
+# 4 -54.5 -64.5 14    1841-04-01  7.84  7.86 0.232    -1.16  -1.01  0.0717 0.0650   111. 7179721107. 0.0000000528 
+# 5 -54.5 -64.5 14    1841-05-01  7.16  7.19 0.195    -1.74  -1.05  0.0566 0.0305   111. 7179721107. 0.0000000181 
+# 6 -54.5 -64.5 14    1841-06-01  6.25  6.27 0.159    -2.42  -1.11  0.0414 0.0124   111. 7179721107. 0.00000000733
+
+# # when loading the printed file 
+# check<-read.csv("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_14.csv")
+# head(check)
+# lat   lon LME          t      sst      sbt        er  intercept      slope
+# 1 -54.5 -64.5  14 1841-01-01 7.948583 7.880984 0.2385617 -0.7724442 -1.0013043
+# 2 -54.5 -64.5  14 1841-02-01 8.433881 8.406563 0.2447559 -0.7890344 -0.9906357
+# 3 -54.5 -64.5  14 1841-03-01 8.389428 8.384884 0.2465563 -0.8622664 -0.9890503
+# 4 -54.5 -64.5  14 1841-04-01 7.841928 7.859843 0.2324489 -1.1557924 -1.0086839
+# 5 -54.5 -64.5  14 1841-05-01 7.162827 7.194753 0.1952542 -1.7380429 -1.0544107
+# 6 -54.5 -64.5  14 1841-06-01 6.245687 6.273799 0.1594469 -2.4159994 -1.1060848
+# sphy       lphy    depth    area_m2      expcbot
+# 1 0.14509845 0.14296427 111.0009 7179721107 2.022832e-07
+# 2 0.10794740 0.12006476 111.0009 7179721107 1.541405e-07
+# 3 0.08777226 0.09939922 111.0009 7179721107 1.063319e-07
+# 4 0.07172815 0.06498957 111.0009 7179721107 5.279879e-08
+# 5 0.05660887 0.03050872 111.0009 7179721107 1.811899e-08
+# 6 0.04137433 0.01239686 111.0009 7179721107 7.334109e-09
+
+# when calculating slope and intercept using the function - OK
+# intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept")
+# slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope"))
+# GetPPIntSlope(0.14509845,0.14296427,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,111.0009,output="intercept") # -0.7724442
+# GetPPIntSlope(0.14509845,0.14296427,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,111.0009,output="slope") # -1.001304
+
 ##### END LME grid cell scale -----
 
 
@@ -1169,7 +1208,7 @@ getGCM(gcmPath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/", protocol = "1deg", 
 
 #### CN Calculate spin-up for CMIP63a climate forcings ----
 
-### got here with code cleaning ..... 
+### got here with code cleaning ..... but code below works and was used to calcualte the spinup 
 
 
 
