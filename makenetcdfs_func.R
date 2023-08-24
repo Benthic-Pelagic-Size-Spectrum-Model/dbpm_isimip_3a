@@ -72,21 +72,21 @@ mknetcdf<-function(varname, protocol, inputpath, datapath, savetopath, grids, is
                 "_nosoc_default_", "disaggregated_", varname, "_global_montly_", 
                 yearRange, ".nc4", sep = "") # according to protocol see below 
   
-  <model>_<climate-forcing>_<climate-scenario>_<soc-scenario>_<sens-scenario>_
-  <variable>_<region>_<time-step>_<start-year>_<end-year>.nc
-  
-  dbpm # model
-  gfdl-mom6-cobalt2 # climate forcing
-  obsclim or ctrlclim or spinup# climate scenario
-  nat#soc scenario wihtout fishing
-  histsoc # soc scenario with fishing
-  60arcmin#sens scenario 1deg resolution
-  15arcmin # sens scenario 0.25 resolution   #protocol to be checked online cause different
-  tcb or other biological stuff # variable
-  global # region
-  monthly #time_step
-  1841_1960#start year spinup # double check
-  1961_2010 # year obsclim and ctrlclim
+  # <model>_<climate-forcing>_<climate-scenario>_<soc-scenario>_<sens-scenario>_
+  # <variable>_<region>_<time-step>_<start-year>_<end-year>.nc
+  # 
+  # dbpm # model
+  # gfdl-mom6-cobalt2 # climate forcing
+  # obsclim or ctrlclim or spinup# climate scenario
+  # nat#soc scenario wihtout fishing
+  # histsoc # soc scenario with fishing
+  # 60arcmin#sens scenario 1deg resolution
+  # 15arcmin # sens scenario 0.25 resolution   #protocol to be checked online cause different
+  # tcb or other biological stuff # variable
+  # global # region
+  # monthly #time_step
+  # 1841_1960#start year spinup # double check
+  # 1961_2010 # year obsclim and ctrlclim
 
   # variable
   
@@ -523,29 +523,19 @@ mknetcdf_agg<-function(varname, protocol, inputpath, datapath, savetopath, grids
 mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, grids, other_param, isave, yearRange, curr_esm){
   
   # # CN  trial
-  # # i = 1
-  # j = 2
-  # varname = "tcblog10"
-  # protocol = prots[j]
-  # inputpath = input_loc
-  # datapath = output_loc
-  # savetopath = save_loc
-  # # igrid = 1
-  # other_param = other_param
-  # isave = isave[[j]]
-  # yearRange = yearRange[j]
-  # curr_esm = curr_esm
+
+  varname = "tcblog10"
+  protocol = prots[iScen]
+  inputpath = input_loc
+  datapath = output_loc
+  savetopath = save_loc
+  # igrid = 1
+  other_param = other_param
+  isave = isave
+  yearRange = yearRange[iESM]
+  curr_esm = curr_esm
   
   # see mknetcdf_agg() above for comments 
-  
-  #TODO check lat/lon
-  if(curr_esm == "IPSL-CM6A-LR"){
-    lon<- -180:179
-  }else{
-    lon<- -179.5:179.5 
-  }
-  
-  lat<- 89.5:-89.5
   
   if(curr_scen == "1deg"){
     lon<- -179.5:179.5 # they should both be -179.5:179.5 but you've run IPSL with the old grid 
@@ -556,15 +546,13 @@ mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, gr
     lat<- 77.5:-89.5
   }
   
-  
-  t<-1:length(isave)  
+  t<-1:length(isave) # this could simply be isave 
   
   # time starts from 1601 and is given in months - matthias fix
-  # add months since 1601 as this is the ISIMIP starting date convention  
-  #TODO check year range
-  if (yearRange == "2015_2100") {
-    months_since_1601 = ((2015-1601)*12) -1 # data in future starts in 2015 - it works in terms of year and month
-  }else {months_since_1601 = ((1850-1601)*12) -1} # data in historical starts in 1980
+  # add months since 1601 as this is the ISIMIP starting date convention    
+  if (yearRange == "1961_2010") {
+    months_since_1601 = ((1961-1841)*12) -1 # obsclim and ctrlclim
+  }else {months_since_1601 = ((1841-1841)*12) -1} # spinup
   t<-t + months_since_1601
   
   # size - fishmip required size bins (1g, 10g, 100g, 1kg, 10kg, 100kg). classes: 1-10, 10-100, 100-1000, 1000-10000, 10000-100000, 100000+
@@ -578,7 +566,7 @@ mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, gr
   var <- array(1e20, dim = c(length(lon), length(lat), length(size), length(t)), dimnames = list(lon,lat, size,t))
   
   # get netcdf names
-  nc_names <- paste(savetopath, protocol,"/dbpm_", tolower(curr_esm), "_nobasd_", protocol, "_nat_default_",varname, "_global_monthly_", yearRange, ".nc", sep = "") 
+  nc_names <- paste(savetopath,"dbpm_", tolower(curr_esm), "_nobasd_", protocol, "_nat_default_",varname, "_global_monthly_", yearRange, ".nc", sep = "") 
   
   # grids<-1:10
   
@@ -586,7 +574,7 @@ mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, gr
     
     # igrid = 1
     
-    data_filename <- paste(datapath, protocol, "/", "dbpm_output_all_", igrid, '_', protocol, '.rds', sep = "")
+    data_filename <- paste(datapath, "dbpm_output_all_", igrid, '_', protocol, '.rds', sep = "")
     
     if(file.exists(data_filename) == TRUE){
       
@@ -594,7 +582,7 @@ mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, gr
       result_set <- readRDS(data_filename) 
       
       # load grid inputs
-      input_filename <- paste(inputpath, protocol, "/", "grid" ,'_' ,igrid, "_", curr_esm,"_", protocol,'.rds', sep = "")
+      input_filename <- paste(inputpath, "grid" ,'_' ,igrid, "_", curr_esm,"_", protocol,'.rds', sep = "")
       
       inputs <- readRDS(input_filename)
       
@@ -743,7 +731,7 @@ mknetcdf_agg_sp<-function(varname, protocol, inputpath, datapath, savetopath, gr
   att.put.nc(new_nc, variable = 'time', type = 'NC_CHAR', name = 'calendar', value = '360_day') 
   att.put.nc(new_nc, variable = 'time', type = 'NC_CHAR', name = 'axis', value = 'T')
   
-  var.def.nc(new_nc, varname, "NC_FLOAT", c('lon', 'lat','size','time'))
+  var.def.nc(new_nc, varname, "NC_FLOAT", c('lon', 'lat','bins','time'))
   att.put.nc(new_nc, variable = varname, type = 'NC_CHAR', name = 'long_name', value = "Total consumers biomass density in log10 weight bins")
   att.put.nc(new_nc, variable = varname, type = 'NC_CHAR', name = 'units', value = "g m-2") 
   att.put.nc(new_nc, variable = varname, type = 'NC_FLOAT', name = 'missing_value', value = 1e20)

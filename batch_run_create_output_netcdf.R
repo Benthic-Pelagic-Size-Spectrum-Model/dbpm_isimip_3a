@@ -14,6 +14,10 @@ library('RNetCDF')
 esms <- c("spinup","ctrlclim" ,"obsclim")
 scenarios <- c("1deg","0.25deg")
 
+# type of outputs to save
+agg_out <- F
+agg_out_sp <- T
+
 for (iESM in esms[2:3]) {
   
   iScen <- 1
@@ -149,131 +153,139 @@ for (iESM in esms[2:3]) {
   
   #### for aggregated outputs ---- 
   
-  dbpm.variables<-data.frame(name = vars2make, 
-                             description = c("Total Consumer Biomass Density",
-                                             "Total Pelagic Biomass Density", 
-                                             "Biomass Density of Small Pelagics <30cm",
-                                             "Biomass Density of Medium Pelagics >=30cm and <90cm",
-                                             "Biomass Density of Large Pelagics >=90cm",
-                                             "Total Demersal Biomass Density",
-                                             "Biomass Density of Small Demersals <30cm",
-                                             "Biomass Density of Medium Demersals >=30cm and <90cm",
-                                             "Biomass Density of Large Demersals >=90cm"))
+  if(agg_out)
+  {
+    dbpm.variables<-data.frame(name = vars2make, 
+                               description = c("Total Consumer Biomass Density",
+                                               "Total Pelagic Biomass Density", 
+                                               "Biomass Density of Small Pelagics <30cm",
+                                               "Biomass Density of Medium Pelagics >=30cm and <90cm",
+                                               "Biomass Density of Large Pelagics >=90cm",
+                                               "Total Demersal Biomass Density",
+                                               "Biomass Density of Small Demersals <30cm",
+                                               "Biomass Density of Medium Demersals >=30cm and <90cm",
+                                               "Biomass Density of Large Demersals >=90cm"))
+    
+    
+    vars2make <- c('tcb', 'tpb', 'bp30cm', 'bp30to90cm',"bp90cm",'tdb','bd30cm', 'bd30to90cm',"bd90cm")
+    
+    # for(i in 1:length(vars2make)){
+    
+    i = 1 # new runs with min size = -3: tcb done, tbp running now 
+    
+    # for(j in 1:length(prots)){ 
+    
+    # j = 3 # ssp126: for aggregated outputs (all grids, monthly outputs) all variables takes 10 h to run  
+    # j = 4 # ssp585: for aggregated outputs (all grids, monthly outputs) all variables takes 10 h  
+    # j = 2 # historical: for aggregated outputs (all grids, monthly outputs) all variables takes ~2.2 days 
+    # j = 1 # picontrol for aggregated outputs (all grids, monthly outputs) all variables takes 17 h
+    
+    # new round as above but only for histo and spps and given model outputs with no temp effect on senescence 
+    # run all together 
+    
+    # fix this for ssp585 due to 22430 cell where U is saved as character - fixed in runmodel_yearly line ~570 but temp solution (now deleted and moved to line ~330 makenetcdf_fumc.R; see below)
+    # Error in result_set$U[other_param$ref:other_param$Nx, isave] * other_param$dx : 
+    # non-numeric argument to binary operator
+    # tcb OK for the 3 protocols  
+    
+    # Fix errors as per Matthias 
+    # j = 3
+    
+    # new runs given no temp effect on senescence and detritus otehr mortality 
+    # run both IPSL and GFDL
+    # the erron on cell 22430 for IPSl did not come up when creating outputs - but it did for another cell for GFDL... how to identify the grid cell? explore which file is bigger than a regular one: cell 38658
+    # to fix this error I transform outputs to numeric (if they have been saved as characters) in line ~ 330 makenetcdf_fumc.R
+    
+    # grids<-36 # for GFDL this grid cell gives an error, it did not like paste(input$depth$lon) so now replaced with input$depth$lon 
+    
+    # i = 1
+    # j = 4
+    
+    # GFDL files corrupted - see note below on size-spectrum function
+    # re-running tcb first as you need to include in CMIP paper - then all the other
+    
+    # re-run all but tcb 
+    
+    ptm=proc.time()
+    options(warn=-1)
+    print(paste('Now working on ', vars2make[i], ' for esm ',iESM," and protocol ", prots[iScen], sep = ''))
+    mknetcdf_agg(vars2make[i], prots[iScen], input_loc, output_loc, save_loc, grids, other_param, isave ,yearRange[iESM], curr_esm)
+    print((proc.time()-ptm)/60.0)
+    
+  }
   
+  # }
   
-  vars2make <- c('tcb', 'tpb', 'bp30cm', 'bp30to90cm',"bp90cm",'tdb','bd30cm', 'bd30to90cm',"bd90cm")
-  
-  # for(i in 1:length(vars2make)){
-  
-  i = 1 # new runs with min size = -3: tcb done, tbp running now 
-  
-  # for(j in 1:length(prots)){ 
-  
-  # j = 3 # ssp126: for aggregated outputs (all grids, monthly outputs) all variables takes 10 h to run  
-  # j = 4 # ssp585: for aggregated outputs (all grids, monthly outputs) all variables takes 10 h  
-  # j = 2 # historical: for aggregated outputs (all grids, monthly outputs) all variables takes ~2.2 days 
-  # j = 1 # picontrol for aggregated outputs (all grids, monthly outputs) all variables takes 17 h
-  
-  # new round as above but only for histo and spps and given model outputs with no temp effect on senescence 
-  # run all together 
-  
-  # fix this for ssp585 due to 22430 cell where U is saved as character - fixed in runmodel_yearly line ~570 but temp solution (now deleted and moved to line ~330 makenetcdf_fumc.R; see below)
-  # Error in result_set$U[other_param$ref:other_param$Nx, isave] * other_param$dx : 
-  # non-numeric argument to binary operator
-  # tcb OK for the 3 protocols  
-  
-  # Fix errors as per Matthias 
-  # j = 3
-  
-  # new runs given no temp effect on senescence and detritus otehr mortality 
-  # run both IPSL and GFDL
-  # the erron on cell 22430 for IPSl did not come up when creating outputs - but it did for another cell for GFDL... how to identify the grid cell? explore which file is bigger than a regular one: cell 38658
-  # to fix this error I transform outputs to numeric (if they have been saved as characters) in line ~ 330 makenetcdf_fumc.R
-  
-  # grids<-36 # for GFDL this grid cell gives an error, it did not like paste(input$depth$lon) so now replaced with input$depth$lon 
-  
-  # i = 1
-  # j = 4
-  
-  # GFDL files corrupted - see note below on size-spectrum function
-  # re-running tcb first as you need to include in CMIP paper - then all the other
-  
-  # re-run all but tcb 
-  
-  ptm=proc.time()
-  options(warn=-1)
-  print(paste('Now working on ', vars2make[i], ' for esm ',iESM," and protocol ", prots[iScen], sep = ''))
-  mknetcdf_agg(vars2make[i], prots[iScen], input_loc, output_loc, save_loc, grids, other_param, isave ,yearRange[iESM], curr_esm)
-  print((proc.time()-ptm)/60.0)
-  
+  #### for aggregated size-spectrum outputs ----
+  if(agg_out_sp)
+  {
+    # for(j in 1:length(prots)){
+    
+    #j = 1
+    # picontrol error then function stopped  
+    # Error in `[<-`(`*tmp*`, inputs$depth$lon, inputs$depth$lat, size[2], ,  : 
+    #                  subscript out of bounds
+    
+    # corrupted file when changed the size bins extremes - try only ssp126 - dowload to desktop and compare with old one 
+    # all seemed to work ok when I printed size-spectrum using old size bins
+    # j = 3 # still corrupted - 21 h to run 
+    # retry - changed matrix indexing to var[pos_lon,pos_lat,1,] where the pos are the position of the lat an dlong withing the matrix 
+    ### IF THIS WORKS you need to check the other outpouts (e.g. tcb) as it's quite strange that the old approach worked for these outputs 
+    # it worked - only 2 h to run (?) warning message 'R version change [4.0.4 -> 4.0.5] detected when restoring session; search path not restored' 
+    # running for the other 2 IpSL scenarios - then check other/previous outputs created with the onld method
+    # hist ok but ssp585 not: Error in result_set$U[xcutref[1]:xcutref[2] - 1, isave] : subscript out of bounds
+    # that was because you forgot to specify a reduced isave and yearrange... 
+    # re-run both with correct values - should take little time
+    # OK worked, 1h historical and 0.5h ssp585
+    
+    # iScen <- 1
+    # iESM <- 1
+    # curr_esm <- esms[iESM]
+    # curr_scen <- scenarios[iScen]
+    
+    # prots <- scenarios
+    # yearRange<- c("1841_1960","1961_2010","1961_2010")
+    # names(yearRange) <- esms
+    
+    # result_set <- readRDS(paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",
+    # curr_esm,"/",curr_scen,"/","dbpm_output_all_1_",curr_scen,".rds"))
+    # isave<-1:dim(result_set$U)[2] 
+    
+    # check with Cami right isave, iScen and iESM
+    
+    # install.packages("tidyverse") # long process ... 
+    # library("tidyverse") # checking for Julia ... 
+    
+    # for(j in 1:length(prots)){  
+    
+    ptm=proc.time()
+    options(warn=-1)
+    print(paste('Now working on ', "tcblog10", ' for protocol ', prots[iScen], " ", curr_esm, sep = ''))
+    mknetcdf_agg_sp("tcblog10", prots[iScen], input_loc, output_loc, save_loc, grids, other_param, isave, yearRange[iESM], curr_esm)
+    print((proc.time()-ptm)/60.0)
+    
+  }
 }
-
-# }
-
-#### for aggregated size-spectrum outputs ----
-
-# for(j in 1:length(prots)){
-
-j = 1
-# picontrol error then function stopped  
-# Error in `[<-`(`*tmp*`, inputs$depth$lon, inputs$depth$lat, size[2], ,  : 
-#                  subscript out of bounds
-
-# corrupted file when changed the size bins extremes - try only ssp126 - dowload to desktop and compare with old one 
-# all seemed to work ok when I printed size-spectrum using old size bins
-# j = 3 # still corrupted - 21 h to run 
-# retry - changed matrix indexing to var[pos_lon,pos_lat,1,] where the pos are the position of the lat an dlong withing the matrix 
-### IF THIS WORKS you need to check the other outpouts (e.g. tcb) as it's quite strange that the old approach worked for these outputs 
-# it worked - only 2 h to run (?) warning message 'R version change [4.0.4 -> 4.0.5] detected when restoring session; search path not restored' 
-# running for the other 2 IpSL scenarios - then check other/previous outputs created with the onld method
-# hist ok but ssp585 not: Error in result_set$U[xcutref[1]:xcutref[2] - 1, isave] : subscript out of bounds
-# that was because you forgot to specify a reduced isave and yearrange... 
-# re-run both with correct values - should take little time
-# OK worked, 1h historical and 0.5h ssp585
-
-iScen <- 1
-iESM <- 1
-curr_esm <- esms[iESM]
-curr_scen <- scenarios[iScen]
-
-prots <- scenarios
-yearRange<- c("1841_1960","1961_2010","1961_2010")
-names(yearRange) <- esms
-
-result_set <- readRDS(paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/",
-                             curr_esm,"/",curr_scen,"/","dbpm_output_all_1_",curr_scen,".rds"))
-isave<-1:dim(result_set$U)[2] 
-
-# check with Cami right isave, iScen and iESM
-
-# install.packages("tidyverse") # long process ... 
-# library("tidyverse") # checking for Julia ... 
-
-# for(j in 1:length(prots)){  
-
-ptm=proc.time()
-options(warn=-1)
-print(paste('Now working on ', "tcblog10", ' for protocol ', prots[iScen], " ", curr_esm, sep = ''))
-mknetcdf_agg_sp("tcblog10", prots[iScen], input_loc, output_loc, save_loc, grids, other_param, isave[[j]] ,yearRange[iESM], curr_esm)
-print((proc.time()-ptm)/60.0)
-
-
-# }
 
 #### check ----
 
 library(ncdf4)
-nc <- nc_open("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/netcdf/historical/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcblog10_global_monthly_1850_2014.nc")
+# nc <- nc_open("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/netcdf/historical/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcblog10_global_monthly_1850_2014.nc")
+nc <- nc_open("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcblog10_global_monthly_1961_2010.nc")
+nc <- nc_open("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcb_global_monthly_1961_2010.nc")
+
 print(nc)
 lon <- ncvar_get(nc, "lon")
 lat <- ncvar_get(nc, "lat")
 time_months <- ncvar_get(nc, "time")
-size <- ncvar_get(nc, "size")
+size <- ncvar_get(nc, "bins")
 yearmonth = as.yearmon("1601-01") + time_months[1] / 12
 
 tcbh <- ncvar_get(nc, "tcblog10")
 dim(tcbh)
 tcbh[1:2,1:2,1:2,1:2]
+tcbh[1:2,1:2,1:2]
+
 
 nc <- open.nc("/../../rd/gem/private/fishmip_outputs/ISIMIP3a/IPSL-CM6A-LR/netcdf/ssp126/dbpm_ipsl_cm6a_lr_nobc_ssp126_nat_default_tcb_global_montly_2015_2100.nc4")
 tcb126 <- var.get.nc(nc, "tcb")
